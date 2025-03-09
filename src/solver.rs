@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub mod solver {
     use std::cmp;
     use std::fmt;
@@ -68,6 +70,33 @@ pub mod solver {
             outcome
         }
 
+        fn is_nonnegative(&self) -> bool {
+            self.x1 >= 0 && self.x2 >= 0 && self.y1 >= 0 && self.y2 >= 0
+        }
+
+        fn locations_have_enough_cars(&self, s1: &State, a: i16) -> bool {
+            let loc1_enough_cars = self.x1 <= s1.n1 as i16 - a;
+            let loc2_enough_cars = self.x2 <= s1.n2 as i16 + a;
+            loc1_enough_cars && loc2_enough_cars
+        }
+
+        /// Find all outcomes that transition from state s1 to state s2
+        /// 
+        /// The `solve` function checks for the following error conditions:
+        /// * Attempting to move more cars than what's available on the lot
+        /// * More cars are rented than what's on the lot
+        /// * the number of retruned cars can't be negative
+        /// 
+        /// Does NOT verify that the action won't cause the maximum number of
+        /// cars on a lot to be exceeded. For example, if the maximum number of
+        /// cars allowed on lot #1 is five, and there are four cars on lot #1,
+        /// and we attempt to move 2 cars to lot #1 from lot #2, `solve` will
+        /// allow the maximum number of cars on the lot to be exceeded. This is
+        /// because `State` does not know the maximum number of cars allowed at
+        /// each location. The options for dealing with this are:
+        /// * Add max car limits to the `State` struct and use those fields
+        ///   `solve`
+        /// * Have the calling code verify action a is valid.
         pub fn solve(s1: &State, s2: &State, xt: u16, a: i16) -> Vec<Outcome> {
             let mut outcomes: Vec<Outcome> = Vec::new();
             // Can't move more cars than what's on lot
@@ -80,9 +109,14 @@ pub mod solver {
             }
             for x in 0..(xt + 1) {
                 let mut z = Outcome::new(x as i16, (xt - x) as i16);
+                if !z.locations_have_enough_cars(s1, a) {
+                    continue
+                }
                 z.y1 = s2.n1 as i16 - s1.n1 as i16 + z.x1 + a;
                 z.y2 = s2.n2 as i16 - s1.n2 as i16 + z.x2 - a;
-                outcomes.push(z);
+                if z.is_nonnegative() {
+                    outcomes.push(z);
+                }
             }
             outcomes
         }
@@ -136,8 +170,8 @@ pub mod solver {
         #[test]
         fn solve_for_outcome_zero_states_nonzero_rentals() {
             // Arrange
-            let s1 = State {n1: 0, n2: 0};
-            let s2 = State {n1: 0, n2: 0};
+            let s1 = State {n1: 3, n2: 3};
+            let s2 = State {n1: 3, n2: 3};
             let xt: u16 = 3;
             let a: i16 = 0;
 
@@ -176,6 +210,74 @@ pub mod solver {
             let s1 = State {n1: 1, n2: 1};
             let s2 = State {n1: 1, n2: 1};
             let xt: u16 = 3;
+            let a: i16 = 0;
+            // Act
+            let outcomes = Outcome::solve(&s1, &s2, xt, a);
+            // Assert
+            assert_eq!(outcomes.len(), 0 as usize);
+        }
+
+        #[test]
+        fn solve_for_outcome_dont_exceed_site_inventory() {
+            // Arrange
+            let s1 = State {n1: 2, n2: 2};
+            let s2 = State {n1: 2, n2: 2};
+            let xt: u16 = 3;
+            let a: i16 = 0;
+            // Act
+            let outcomes = Outcome::solve(&s1, &s2, xt, a);
+            // Assert
+            // for outcome in outcomes {
+            //     println!("{}", outcome);
+            // }
+            assert_eq!(outcomes.len(), 2 as usize);
+            assert_eq!(outcomes[0], Outcome {x1: 1, y1: 1, x2: 2, y2: 2});
+            assert_eq!(outcomes[outcomes.len() - 1], Outcome {x1: 2, y1: 2, x2: 1, y2: 1});
+            for outcome in outcomes {
+                assert!(check_outcome(&s1, &s2, &outcome, xt, a));
+            }
+        }
+
+        #[test]
+        fn solve_for_outcome_with_move() {
+            // Arrange
+            let s1 = State {n1: 2, n2: 2};
+            let s2 = State {n1: 2, n2: 2};
+            let xt: u16 = 3;
+            let a: i16 = 1;
+            // Act
+            let outcomes = Outcome::solve(&s1, &s2, xt, a);
+            assert_eq!(outcomes.len(), 2 as usize);
+            assert_eq!(outcomes[0], Outcome {x1: 0, y1: 1, x2: 3, y2: 2});
+            assert_eq!(outcomes[outcomes.len() - 1], Outcome {x1: 1, y1: 2, x2: 2, y2: 1});
+            for outcome in outcomes {
+                assert!(check_outcome(&s1, &s2, &outcome, xt, a));
+            }
+        }
+
+        #[test]
+        fn solve_for_outcome_with_negative_move() {
+            // Arrange
+            let s1 = State {n1: 2, n2: 2};
+            let s2 = State {n1: 2, n2: 2};
+            let xt: u16 = 3;
+            let a: i16 = -2;
+            // Act
+            let outcomes = Outcome::solve(&s1, &s2, xt, a);
+            // Assert
+            assert_eq!(outcomes.len(), 1 as usize);
+            assert_eq!(outcomes[0], Outcome {x1: 3, y1: 1, x2: 0, y2: 2});
+            for outcome in outcomes {
+                assert!(check_outcome(&s1, &s2, &outcome, xt, a));
+            }
+        }
+
+        #[test]
+        fn solve_for_outcome_no_negative_returns() {
+            // Arrange
+            let s1 = State {n1: 5, n2: 5};
+            let s2 = State {n1: 0, n2: 5};
+            let xt: u16 = 2;
             let a: i16 = 0;
             // Act
             let outcomes = Outcome::solve(&s1, &s2, xt, a);

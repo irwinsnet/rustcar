@@ -5,7 +5,10 @@ edition = "2021"
 
 [dependencies]
 approx = "0.5.1"
+clap = { version = "4.5.31", features = ["derive"] }
+config-file = "0.2.3"
 ndarray = { version = "0.16.1", features = ["approx"] }
+serde = { version = "1.0.218", features = ["derive"] }
 statrs = "0.18.0"
 
 [dev-dependencies]

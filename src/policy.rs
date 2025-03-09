@@ -1,10 +1,34 @@
+//! Policy Crate
+//! 
+//! In reinforcment learning, the policy is the set of actions that are chosen
+//! for each state. The policy is represented by the `Policy` struct in the
+//! `policy` module.
+
+#![allow(unused)]
+
+
 pub mod policy {
 
+    /// Mapping of states to action.
+    /// 
+    /// The `action_value` field contains our current estimate of the value
+    /// of each state-action combination. The value is the expected value of
+    /// the sum of all subsequent rewards, assuming we follow the policy.
+    /// 
+    /// The `policy` field is a mapping of states to actions. The indices are
+    /// the number of cars at location 1 and location 2, and the array value
+    /// is an integer representing the number of cars to move from loc #1 to
+    /// loc #2. Negative actions indicate cars are moved from loc #2 to loc #1.
     pub struct Policy {
+        /// Maximum number of cars that can be kept at location #1
         pub max1: u8,
+        /// Maximum number of cars that can be kept at location #2
         pub max2: u8,
+        /// Maximum nmber of cars that can be moved between locations
         pub max_move: u8,
+        /// Indexes are n1, n2, a + max_move
         pub action_value: ndarray::Array3<f64>,
+        /// Indexes are n1, n2
         pub policy: ndarray::Array2<i8>
     }
 

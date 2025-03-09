@@ -1,3 +1,4 @@
+#![allow(unused)]
 
 mod policy;
 mod solver;
@@ -14,17 +15,29 @@ pub mod cars {
     /// Precalculate rental and return probabilities when object is constructed.
     /// Indices to probability tables x1, y1, x2, and y2 are
     /// [cars on lot, number of cars rented or returned].
+    /// Use Poisson distribution to calculate probabilities.
     pub struct CarProbs {
+        /// Maximum number of cars that can be stored at location #1
         pub max1: u8,
+        /// Expected number of cars rented each day
         pub rent_mean1: f32,
+        /// Expected number of cars returned each day
         pub return_mean1: f32,
-        pub x1: ndarray::Array2<f64>,  // Site 1 rental probabilities
-        pub y1: ndarray::Array2<f64>,  // Site 1 return probabilities
+        /// Loc 1 rental probs. Indexes: number of cars on lot, number of cars rented
+        pub x1: ndarray::Array2<f64>,
+        /// Loc 1 return probs. Indexes: number of cars on lot, number of cars returned
+        pub y1: ndarray::Array2<f64>,
+        /// Maximum number of cars that can be stored at location #2
         pub max2: u8,
+        /// Expected number of cars rented each day
         pub rent_mean2: f32,
+        /// Expected number of cars returned each day
         pub return_mean2: f32,
-        pub x2: ndarray::Array2<f64>,  // Site 2 rental probabilities
-        pub y2: ndarray::Array2<f64>,  // Site 2 return probabilities
+        /// Loc 2 rental probs. Indexes: number of cars on lot, number of cars rented
+        pub x2: ndarray::Array2<f64>, 
+        /// Loc 2 return probs. Indexes: number of cars on lot, number of cars returned
+        pub y2: ndarray::Array2<f64>,
+        /// Maximum number of cars that can be moved between loc #1 and loc #2
         pub max_move: u8,
     }
 
@@ -145,74 +158,6 @@ pub mod cars {
         pub fn reward(xt: u8, a: i16) -> i16 {
             xt as i16 * 10 - 2 * a.abs()
         }
-    }
-
-
-    #[derive(Debug)]
-    pub struct State {
-        pub n1: u8,
-        pub n2: u8,
-    }
-
-
-    #[derive(Debug)]
-    pub struct StateTransitionSolution {
-        pub x1: i16,  // Cars rented at site #1
-        pub x2: i16,  // Cars rented at site #2
-        pub y1: i16,  // Cars returned at site #1
-        pub y2: i16,  // Cars returned at site #2
-    }
-
-    impl StateTransitionSolution {
-        pub fn new(x1: i16, x2: i16) -> StateTransitionSolution {
-            let sol =
-                StateTransitionSolution { x1, x2,  y1: 0, y2: 0};
-            sol
-        }
-        /// Calculate number of cars rented from reward and number of cars moved (action).
-
-
-        /// All solution parameters must be non-negative.
-        pub fn is_valid(&self) -> bool {
-            self.x1 >= 0 && self.x2 >= 0 && self.y1 >= 0 && self.y2 >= 0
-        }
-
-        /// Can't rent more cars than what's on lot.
-        pub fn is_within_inventory(&self, s1: &State, a: i16) -> bool {
-            self.x1 <= s1.n1 as i16 - a && self.x2 <= s1.n2 as i16 + a
-        }
-        /// Find all possible solutions for transitioning between two states.
-        ///
-        /// s1 is the initial number of cars at both sites.
-        /// s2 is the number of cars at both sites after moving a cars between
-        ///     sites. When `a` is positive, a cars are moved from site 1 to site 2.
-        ///     When `a` is negative, -a cares are moved from site 2 to site 1.
-        ///
-        /// There can be as many solutions as the total number of cars rented from
-        /// both sites, plus 1.
-        pub fn solve(s1: &State, s2: &State, xt: u16, a: i16
-        ) -> Vec<StateTransitionSolution> {
-            let mut solutions: Vec<StateTransitionSolution> = Vec::new();
-            // Can't move more cars than are on site.
-            if a > s1.n1 as i16 ||  -a > s1.n2 as i16 {
-                return solutions;
-            }
-            // let total_cars_rented = Solution::cars_rented(r, a);
-            for x in 0..xt + 1 {
-                let mut z =
-                    StateTransitionSolution::new(x as i16, (xt - x) as i16);
-                z.y1 = s2.n1 as i16 - s1.n1 as i16 + z.x1 + a;
-                z.y2 = s2.n2 as i16 - s1.n2 as i16 + z.x2 - a;
-                if z.is_valid() && z.is_within_inventory(s1, a) {
-                    solutions.push(z);
-                } 
-            }
-            solutions
-        }
-
-
-
-
     }
 
 
