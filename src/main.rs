@@ -1,10 +1,11 @@
 #![allow(unused)]
 
-use std::path::PathBuf;
-use clap::Parser;
+use std::{future::poll_fn, path::PathBuf};
+use clap::{Parser, Subcommand};
 use config_file::FromConfigFile;
-use rustcar2::cars;
 use serde::Deserialize;
+
+use rustcar2::{cars::CarProbs, policy};
 
 
 /// Command line argument parser.
@@ -12,7 +13,19 @@ use serde::Deserialize;
 #[command(about = "Solve the Barto and Sutton Car Rental Problem", long_about = None)]
 pub struct Args {
     /// Path to RustCar configuration TOML file.
-    config_path: Option<PathBuf>
+    config_path: PathBuf,
+
+    #[command(subcommand)]
+    command: Commands
+}
+
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Print rental and return probabilities.
+    Probs,
+    /// Solve for optimal policy
+    Solve
 }
 
 /// Hold information read form TOML configuration file.
@@ -24,22 +37,41 @@ pub struct CarConfig {
     pub max2: u8,
     pub rent_mean2: f32,
     pub return_mean2: f32,
-    pub max_move: u8
+    pub max_move: u8,
+    pub gamma: f32
 }
 
 
 fn main() {
     let args = Args::parse();
-    let config_path = args.config_path
-        .expect("No file path provided.");
+    let cprobs = get_carprobs_from_config(&args.config_path);
+
+
+
+
+    match &args.command {
+        Commands::Probs => {
+            cprobs.show_probs();
+        }
+        Commands::Solve => {println!("Solve the car rental problem.???!!")}
+    }
+
+    println!("Initializing Policy.");
+    let cpolicy = rustcar2::policy::Policy::new(
+        cprobs.max1, cprobs.max2, cprobs.max_move
+    );
+}
+
+
+fn get_carprobs_from_config(config_path: &PathBuf) -> CarProbs {
     println!("Reading config file: {}", config_path.to_str()
         .expect("Involid file path."));
     let config = CarConfig::from_config_file(config_path)
         .expect("Unable to read configuration file.");
-    println!("{:?}", config);
-
-    let cprobs = cars::CarProbs::new(
+    println!("Calculating rental and return probabilities.");
+    let cprobs = rustcar2::cars::CarProbs::new(
         config.max1, config.rent_mean1, config.return_mean1,
         config.max2, config.rent_mean2, config.return_mean2,
         config.max_move);
+    cprobs
 }
