@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use config_file::FromConfigFile;
 use serde::Deserialize;
 
-use rustcar2::{cars::CarProbs, policy};
+use rustcar2::{cars::CarProbs, policy, solver::State};
 
 
 /// Command line argument parser.
@@ -24,7 +24,10 @@ pub struct Args {
 enum Commands {
     /// Print rental and return probabilities.
     Probs,
+    /// Calculate expected reward for a state.
+    Reward {n1: u8, n2: u8},
     /// Solve for optimal policy
+    Trace {s1_n1: u8, s1_n2: u8, s2_n1: u8, s2_n2: u8, a: i8, xt: u32},
     Solve
 }
 
@@ -46,12 +49,21 @@ fn main() {
     let args = Args::parse();
     let cprobs = get_carprobs_from_config(&args.config_path);
 
-
-
-
     match &args.command {
         Commands::Probs => {
             cprobs.show_probs();
+        }
+        Commands::Reward {n1, n2} => {
+            let r = cprobs.calc_value(&State {n1: *n1, n2: *n2});
+            println!("Expected Reward: {:.2}", r);
+        }
+        Commands::Trace {s1_n1, s1_n2, s2_n1, s2_n2, a, xt  } => {
+            let s1 = State { n1: *s1_n1, n2: *s1_n2 };
+            let s2 = State { n1: *s2_n1, n2: *s2_n2 };
+            let (r, prob, oprobs) = cprobs.calc_reward_prob(&s1, &s2, *a, *xt);
+            for oc in oprobs {
+                println!("{:?}", oc);
+            }
         }
         Commands::Solve => {println!("Solve the car rental problem.???!!")}
     }

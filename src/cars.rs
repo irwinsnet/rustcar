@@ -1,12 +1,46 @@
 
-use std::cmp;
+use std::{cmp, io};
 use statrs::distribution::{Discrete, DiscreteCDF, Poisson};
 use crate::policy;
 use crate::solver::{State, Outcome, StateIterator};
 
 // use statrs::statistics::Data;
 
+
+#[derive(Debug)]
+pub struct OutcomeProb {
+    pub s1_n1: u8,
+    pub s1_n2: u8,
+    pub s2_n1: u8,
+    pub s2_n2: u8,
+    pub xt: u32,
+    pub a: i8,
+    pub r: i32,
+    pub x1: i32,
+    pub x2: i32,
+    pub y1: i32,
+    pub y2: i32,
+    pub prob: f64
+}
+
+impl OutcomeProb {
+    pub fn new(
+        s1: &State, s2: &State, xt: u32, a: i8, r: i32, ocome: &Outcome, prob: f64
+    ) -> OutcomeProb {
+        OutcomeProb {
+            s1_n1: s1.n1, s1_n2: s1.n2, s2_n1: s2.n1, s2_n2: s2.n2,
+            xt, a, r,
+            x1: ocome.x1, x2: ocome.x2, y1: ocome.y1, y2: ocome.y2,
+            prob
+        }
+    }
+}
+
+
 /// Car rental and return probabilities.
+/// 
+/// Specify the maximum number of cars allowed at each location and the
+/// maximum number of cars that can be moved when initializing the struct.
 /// 
 /// Precalculate rental and return probabilities when object is constructed.
 /// Indices to probability tables x1, y1, x2, and y2 are
@@ -42,6 +76,8 @@ pub struct CarProbs {
 }
 
 impl CarProbs {
+
+    /// Create a new struct with pre-calculated probabilities.
     pub fn new(
         max1: u8, rent_mean1: f32, return_mean1: f32,
         max2: u8, rent_mean2: f32, return_mean2: f32,
@@ -70,6 +106,12 @@ impl CarProbs {
         }
     }
 
+    /// Calculate the rental probabilities from the mean and max car limit.
+    /// 
+    /// The mean is the mean number of cars that are rented each day.
+    /// Obviously you can't rent more cars than what's on the lot, so for
+    /// x = max_n, p(x) = 1 - P(x-1) where P is cumulative Poisson
+    /// distribution.
     fn calc_rent_probs(mean: f32, max_n: u8) -> ndarray::Array2<f64> {
         let rent_dist = Poisson::new(f64::from(mean)).unwrap();
         let dim = (max_n + 1) as usize;
@@ -105,15 +147,21 @@ impl CarProbs {
         0.0
     }
 
+    /// Calculate the return probabilities from the mean and max car limit.
+    /// 
+    /// The mean is the mean number of cars that are returned each day.
+    /// Obviously you can't return more cars than what can fit on the lot, so
+    /// for y = max_n - n, p(y) = 1 - P(y-1) where P is cumulative Poisson
+    /// distribution.
     fn calc_return_probs(mean: f32, max_n: u8) -> ndarray::Array2<f64> {
         let return_dist = Poisson::new(f64::from(mean)).unwrap();
         let dim = (max_n + 1) as usize;
         let mut y_probs =
             ndarray::Array2::<f64>::zeros((dim, dim));
         for n in 0..max_n + 1 {
-            for x in 0..max_n + 1 {
-                y_probs[[n as usize, x as usize]] = 
-                    CarProbs::return_prob(n, x, max_n, &return_dist);
+            for y in 0..max_n + 1 {
+                y_probs[[n as usize, y as usize]] = 
+                    CarProbs::return_prob(n, y, max_n, &return_dist);
             }
         }
         y_probs
@@ -147,14 +195,26 @@ impl CarProbs {
         0.0
     }
 
-    pub fn outcome_prob(&self, s: &State, outcome: &Outcome) -> f64 {
-        let p_x1 = self.x1[[s.n1 as usize, outcome.x1 as usize]];
-        let p_y1 = self.y1[[s.n1 as usize, outcome.y1 as usize]];
-        let p_x2 = self.x2[[s.n2 as usize, outcome.x2 as usize]];
-        let p_y2 = self.y2[[s.n2 as usize, outcome.y2 as usize]];
+    /// Calculate the probability for set of rental and return totals.
+    /// 
+    /// Assumes that site #1 and site #2 rental and return probabilities are
+    /// indepdendent. Probabilities depend on number of care rented or returned
+    /// and the number of cars on the lot.
+    pub fn outcome_prob(&self, s: &State, a: i8, outcome: &Outcome) -> f64 {
+        let p_x1 = self.x1[[s.n1 as usize - a as usize, outcome.x1 as usize]];
+        let p_y1 = self.y1[
+            [s.n1 as usize - a as usize - outcome.x1 as usize,
+            outcome.y1 as usize]
+        ];
+        let p_x2 = self.x2[[s.n2 as usize + a as usize , outcome.x2 as usize]];
+        let p_y2 = self.y2[
+            [s.n2 as usize + a as usize - outcome.x2 as usize,
+             outcome.y2 as usize]
+        ];
         p_x1 * p_y1 * p_x2 * p_y2
     }
 
+    /// Display a probability table on the command line, for troubleshooting.
     fn show_array(arr: &ndarray::Array2<f64>, row_prefix: String) {
         print!("    cars on lot:");
         for n in 0..arr.dim().0 {
@@ -172,6 +232,7 @@ impl CarProbs {
         }
     }
 
+    /// Show all four probability tables in the terminal.
     pub fn show_probs(&self) {
         println!("\n=== Location #1 Rental Probabilities ===");
         CarProbs::show_array(&self.x1, String::from("  cars rented"));
@@ -181,6 +242,18 @@ impl CarProbs {
         CarProbs::show_array(&self.x2, String::from("  cars rented"));
         println!("\n=== Location #2 Return Probabilities ===");
         CarProbs::show_array(&self.y2, String::from("cars returned"));
+    }
+
+    /// Send probability table to standard out, as CSV text.
+    pub fn array_to_csv(arr: &ndarray::Array2<f64>) {
+        let mut wtr = csv::Writer::from_writer(io::stdout());
+        for i in 0..arr.dim().0 {
+            for j in 0..arr.dim().1 {
+                wtr.write_field(format!("{:.4}", arr[[i, j]]));
+            }
+            wtr.write_record(None::<&[u8]>);
+        }
+
     }
 
     /// Calculate number of cars rented from the reward and action.
@@ -195,13 +268,28 @@ impl CarProbs {
         cars as u8
     }
 
-    /// Calculate the reward give the number of cars rented and action.
+    /// Calculate the reward given the number of cars rented and action.
     pub fn reward(xt: u32, a: i8) -> i32 {
         xt as i32  * 10 - 2 * a.abs() as i32
     }
 
+    /// Calculate value for a given state, assume action is per current policy.
+    ///
+    /// The state is the number of cars at site #1 and site #2 at the beginning
+    /// of the turn. The value is the discounted, expected total reward.
     pub fn calc_value(&self, s1: &State) -> f64 {
         let a = self.pi.policy[[s1.n1 as usize, s1.n2 as usize]];
+        self.calc_value_for_action(s1, a)
+    }
+
+    /// Calculate the value for a given state and action.
+    /// 
+    /// The action need not be per the current policy.
+    /// 
+    /// Iterate over all possible states and rewards. Calculate the probability
+    /// of each state-reward combination and multiply it times the sum of the
+    /// expected reward and the discounted values of the next state (s2).
+    pub fn calc_value_for_action(&self, s1: &State, a: i8) -> f64 {
         // Action is invalid if there are not enough cars to move or move exceeds max
         if a > 0 {
             if a + s1.n2 as i8 > self.max2 as i8 || s1.n1 as i8 - a < 0 {
@@ -218,18 +306,31 @@ impl CarProbs {
             let max_rented = s1.n1.checked_add(s1.n2)
                 .expect("Overflow") as u32;
             for xt in 0..(max_rented + 1) {
-                let r = CarProbs::reward(xt, a);
-                let outcomes = Outcome::solve(s1, &s2, xt, a);
-                let mut reward_prob = 0.0;
-                for outcome in outcomes {
-                    reward_prob += self.outcome_prob(&s2, &outcome);
-                }
+                let (r, reward_prob, _) = self.calc_reward_prob(s1, &s2, a, xt);
                 value += reward_prob * (r as f64 + self.g * v_s2);
             }
         }
         value
     }
-    
+
+    /// Calculate probability of state s2 with reward r, given state s1 and action a.
+    pub fn calc_reward_prob(
+        &self, s1: &State, s2: &State, a: i8, xt: u32
+    ) -> (i32, f64, Vec<OutcomeProb>)  {
+        let r = CarProbs::reward(xt, a);
+        let outcomes = Outcome::solve(s1, &s2, xt, a);
+        let mut reward_prob = 0.0;
+        let mut oprobs: Vec<OutcomeProb> = Vec::new();
+        for outcome in outcomes {
+            let prob = self.outcome_prob(&s1, a, &outcome);
+            oprobs.push(
+                OutcomeProb::new(s1, s2, xt, a, r, &outcome, prob)
+            );
+            reward_prob += prob;
+
+        }
+        (r, reward_prob, oprobs)
+    }    
 
 }
 
@@ -311,7 +412,30 @@ mod tests {
         // Assert
         assert!(cv > 0.0);
         assert!(cv < 20.0);
-    }    
+    }
+
+    #[test]
+    fn test_scenario1() {
+        // Arrange
+        let cprobs = CarProbs::new(
+            3, 2.0, 1.0, 3, 1.0, 2.0, 1);
+        let s1 = State { n1: 1, n2: 1 };
+        let s2 = State { n1: 0, n2: 0 };
+        // Act
+        let (r, prob, trace) = cprobs.calc_reward_prob(&s1, &s2, 0, 2);
+        for ocome in trace {
+            println!("{:?}", ocome);
+        }
+    }
+
+    #[test]
+    fn view_array() {
+        let cprobs = CarProbs::new(
+            3, 2.0, 1.0, 3, 1.0, 2.0, 1);
+            CarProbs::array_to_csv(&cprobs.y2);
+    }
+
+
 }
 
 

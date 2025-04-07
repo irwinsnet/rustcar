@@ -74,6 +74,8 @@ impl Outcome {
         self.x1 >= 0 && self.x2 >= 0 && self.y1 >= 0 && self.y2 >= 0
     }
 
+    /// Adjust site inventories for action a and verifies that each site
+    /// has sufficient cars for the specified outcome.
     fn locations_have_enough_cars(&self, s1: &State, a: i8) -> bool {
         let loc1_enough_cars = self.x1 <=
             s1.n1.checked_add_signed(-a).expect("Overflow") as i32;
@@ -86,8 +88,13 @@ impl Outcome {
     /// 
     /// The `solve` function checks for the following error conditions:
     /// * Attempting to move more cars than what's available on the lot
-    /// * More cars are rented than what's on the lot
+    /// * More cars are rented than what's on both lots
     /// * the number of retruned cars can't be negative
+    /// 
+    /// While `solve` won't calculate solutions for outcomes where the total
+    /// number of rentals are higher than the total number of cars in the
+    /// system. Also won't return outcomes where the cars rented at a site
+    /// exceed the available cars after moving cars (taking action a).
     /// 
     /// Does NOT verify that the action won't cause the maximum number of
     /// cars on a lot to be exceeded. For example, if the maximum number of
@@ -105,7 +112,7 @@ impl Outcome {
         if a > s1.n1 as i8 ||  -a > s1.n2 as i8 {
             return outcomes;
         }
-        // Can't rent more cars than what's on lot.
+        // Can't rent more cars than what's on both lots.
         if xt > s1.n1.checked_add(s1.n2).expect("Overflow") as u32 {
             return outcomes;
         }

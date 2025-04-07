@@ -1,0 +1,8 @@
+max1 = 3
+rent_mean1 = 1
+return_mean1 = 2
+max2 = 3
+rent_mean2 = 2
+return_mean2 = 1
+max_move = 1
+gamma = 0.9
