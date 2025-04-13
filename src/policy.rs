@@ -6,6 +6,8 @@
 
 #![allow(unused)]
 
+use crate::cars::RentalAgency;
+
 
 /// Mapping of states to action.
 /// 
@@ -46,6 +48,10 @@ impl Policy {
             max1, max2, max_move, action_value, policy: policy_array
         };
         policy
+    }
+
+    pub fn build_from_agency(agency: &RentalAgency) -> Policy {
+        Policy::new(agency.max1, agency.max2, agency.max_move)
     }
 
     pub fn get_value(&self, n1: u8, n2: u8, a: i8) -> f64 {

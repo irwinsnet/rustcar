@@ -46,7 +46,7 @@ impl OutcomeProb {
 /// Indices to probability tables x1, y1, x2, and y2 are
 /// [cars on lot, number of cars rented or returned].
 /// Use Poisson distribution to calculate probabilities.
-pub struct CarProbs {
+pub struct RentalAgency {
     /// Maximum number of cars that can be stored at location #1
     pub max1: u8,
     /// Expected number of cars rented each day
@@ -71,38 +71,35 @@ pub struct CarProbs {
     pub max_move: u8,
     /// Discount rate
     pub g: f64,
-    /// Current policy
-    pub pi: policy::Policy
 }
 
-impl CarProbs {
+impl RentalAgency {
 
     /// Create a new struct with pre-calculated probabilities.
     pub fn new(
         max1: u8, rent_mean1: f32, return_mean1: f32,
         max2: u8, rent_mean2: f32, return_mean2: f32,
         max_move: u8,
-    ) -> CarProbs {
+    ) -> RentalAgency {
         if max_move > cmp::min(max1, max2) / 2 {
             panic!("Max move must be less than half of smallest lot max.")
         }
         let x1_probs =
-            CarProbs::calc_rent_probs(rent_mean1, max1);
+            RentalAgency::calc_rent_probs(rent_mean1, max1);
         let y1_probs = 
-            CarProbs::calc_return_probs(return_mean1, max1);
+            RentalAgency::calc_return_probs(return_mean1, max1);
         let x2_probs =
-            CarProbs::calc_rent_probs(rent_mean2, max2);
+            RentalAgency::calc_rent_probs(rent_mean2, max2);
         let y2_probs = 
-            CarProbs::calc_return_probs(return_mean2, max2);
-        let pi = policy::Policy::new(max1, max2, max_move);
+            RentalAgency::calc_return_probs(return_mean2, max2);
 
-        CarProbs {
+        RentalAgency {
             max1, rent_mean1, return_mean1,
             x1: x1_probs, y1: y1_probs,
             max2, rent_mean2, return_mean2,
             x2: x2_probs, y2: y2_probs,
             max_move,
-            g: 0.9, pi
+            g: 0.9
         }
     }
 
@@ -120,7 +117,7 @@ impl CarProbs {
         for n in 0..max_n + 1 {
             for x in 0..max_n + 1 {
                 x_probs[[n as usize, x as usize]] = 
-                    CarProbs::rent_prob(n, x, max_n, &rent_dist);
+                    RentalAgency::rent_prob(n, x, max_n, &rent_dist);
             }
         }
         x_probs
@@ -161,7 +158,7 @@ impl CarProbs {
         for n in 0..max_n + 1 {
             for y in 0..max_n + 1 {
                 y_probs[[n as usize, y as usize]] = 
-                    CarProbs::return_prob(n, y, max_n, &return_dist);
+                    RentalAgency::return_prob(n, y, max_n, &return_dist);
             }
         }
         y_probs
@@ -201,16 +198,12 @@ impl CarProbs {
     /// indepdendent. Probabilities depend on number of care rented or returned
     /// and the number of cars on the lot.
     pub fn outcome_prob(&self, s: &State, a: i8, outcome: &Outcome) -> f64 {
-        let p_x1 = self.x1[[s.n1 as usize - a as usize, outcome.x1 as usize]];
-        let p_y1 = self.y1[
-            [s.n1 as usize - a as usize - outcome.x1 as usize,
-            outcome.y1 as usize]
-        ];
-        let p_x2 = self.x2[[s.n2 as usize + a as usize , outcome.x2 as usize]];
-        let p_y2 = self.y2[
-            [s.n2 as usize + a as usize - outcome.x2 as usize,
-             outcome.y2 as usize]
-        ];
+        let n1 = (s.n1 as i8 - a) as usize;
+        let p_x1 = self.x1[[n1, outcome.x1 as usize]];
+        let p_y1 = self.y1[[n1 - outcome.x1 as usize, outcome.y1 as usize]];
+        let n2 = (s.n2 as i8 + a) as usize;
+        let p_x2 = self.x2[[n2, outcome.x2 as usize]];
+        let p_y2 = self.y2[[n2 - outcome.x2 as usize,outcome.y2 as usize]];
         p_x1 * p_y1 * p_x2 * p_y2
     }
 
@@ -235,13 +228,13 @@ impl CarProbs {
     /// Show all four probability tables in the terminal.
     pub fn show_probs(&self) {
         println!("\n=== Location #1 Rental Probabilities ===");
-        CarProbs::show_array(&self.x1, String::from("  cars rented"));
+        RentalAgency::show_array(&self.x1, String::from("  cars rented"));
         println!("\n=== Location #1 Return Probabilities ===");
-        CarProbs::show_array(&self.y1, String::from("cars returned"));
+        RentalAgency::show_array(&self.y1, String::from("cars returned"));
         println!("\n=== Location #2 Rental Probabilities ===");
-        CarProbs::show_array(&self.x2, String::from("  cars rented"));
+        RentalAgency::show_array(&self.x2, String::from("  cars rented"));
         println!("\n=== Location #2 Return Probabilities ===");
-        CarProbs::show_array(&self.y2, String::from("cars returned"));
+        RentalAgency::show_array(&self.y2, String::from("cars returned"));
     }
 
     /// Send probability table to standard out, as CSV text.
@@ -277,10 +270,10 @@ impl CarProbs {
     ///
     /// The state is the number of cars at site #1 and site #2 at the beginning
     /// of the turn. The value is the discounted, expected total reward.
-    pub fn calc_value(&self, s1: &State) -> f64 {
-        let a = self.pi.policy[[s1.n1 as usize, s1.n2 as usize]];
-        self.calc_value_for_action(s1, a)
-    }
+    // pub fn calc_value(&self, s1: &State) -> f64 {
+    //     let a = self.pi.policy[[s1.n1 as usize, s1.n2 as usize]];
+    //     self.calc_value_for_action(s1, a)
+    // }
 
     /// Calculate the value for a given state and action.
     /// 
@@ -289,7 +282,8 @@ impl CarProbs {
     /// Iterate over all possible states and rewards. Calculate the probability
     /// of each state-reward combination and multiply it times the sum of the
     /// expected reward and the discounted values of the next state (s2).
-    pub fn calc_value_for_action(&self, s1: &State, a: i8) -> f64 {
+    pub fn calc_value_for_action(
+        &self, s1: &State, a: i8, pi: &policy::Policy) -> f64 {
         // Action is invalid if there are not enough cars to move or move exceeds max
         if a > 0 {
             if a + s1.n2 as i8 > self.max2 as i8 || s1.n1 as i8 - a < 0 {
@@ -302,7 +296,7 @@ impl CarProbs {
         }
         let mut value = 0.0;
         for s2 in StateIterator::new(self.max1, self.max2) {
-            let mut v_s2 = self.pi.get_value(s2.n1, s2.n2, a);
+            let mut v_s2 = pi.get_value(s2.n1, s2.n2, a);
             let max_rented = s1.n1.checked_add(s1.n2)
                 .expect("Overflow") as u32;
             for xt in 0..(max_rented + 1) {
@@ -317,7 +311,7 @@ impl CarProbs {
     pub fn calc_reward_prob(
         &self, s1: &State, s2: &State, a: i8, xt: u32
     ) -> (i32, f64, Vec<OutcomeProb>)  {
-        let r = CarProbs::reward(xt, a);
+        let r = RentalAgency::reward(xt, a);
         let outcomes = Outcome::solve(s1, &s2, xt, a);
         let mut reward_prob = 0.0;
         let mut oprobs: Vec<OutcomeProb> = Vec::new();
@@ -327,7 +321,6 @@ impl CarProbs {
                 OutcomeProb::new(s1, s2, xt, a, r, &outcome, prob)
             );
             reward_prob += prob;
-
         }
         (r, reward_prob, oprobs)
     }    
@@ -346,7 +339,7 @@ mod tests {
     #[test]
     fn rent_probs_small() {
         // Act
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             3, 1.0, 1.0, 2, 1.5, 0.5, 1);
         for px in cprobs.x1.sum_axis(ndarray::Axis(1)) {
             assert_abs_diff_eq!(px as f32, 1.0, epsilon = f32::EPSILON)
@@ -359,7 +352,7 @@ mod tests {
     #[test]
     fn rent_probs_big() {
         // Act
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             20, 3.0, 3.0, 20, 4.0, 2.0, 5);
         for px in cprobs.x1.sum_axis(ndarray::Axis(1)) {
             assert_abs_diff_eq!(px as f32, 1.0, epsilon = f32::EPSILON)
@@ -376,7 +369,7 @@ mod tests {
     #[test_case(5, -2, 46; "Rentals and action from 2 to 1")]
     #[test_case(4, 3, 34; "Rentals and action from 1 to 2")]
     fn test_reward_calculation(xt: u32, a: i8, r: i32) {
-        assert_eq!(CarProbs::reward(xt, a), r);
+        assert_eq!(RentalAgency::reward(xt, a), r);
     }
 
     #[test_case(-2, 1, 0; "Negative reward")]
@@ -384,13 +377,13 @@ mod tests {
     #[test_case(40, 0, 4; "No action")]
     #[test_case(20, 5, 3; "Several cars rented with action")]
     fn test_cars_rented_calculation(r: i16, a: i16, xt: u8) {
-        assert_eq!(CarProbs::cars_rented(r, a), xt);
+        assert_eq!(RentalAgency::cars_rented(r, a), xt);
     }
 
     #[test]
     fn test_calc_value_no_cars() {
         // Arrange
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             5, 2.0, 2.0,
             5, 2.0, 1.0, 2);
         let s1 = State {n1: 0, n2: 0};
@@ -403,7 +396,7 @@ mod tests {
     #[test]
     fn test_calc_value_some_cars() {
         // Arrange
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             5, 2.0, 1.0,
             5, 1.0, 2.0, 2);
         let s1 = State {n1: 1, n2: 1};
@@ -417,7 +410,7 @@ mod tests {
     #[test]
     fn test_scenario1() {
         // Arrange
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             3, 2.0, 1.0, 3, 1.0, 2.0, 1);
         let s1 = State { n1: 1, n2: 1 };
         let s2 = State { n1: 0, n2: 0 };
@@ -430,9 +423,9 @@ mod tests {
 
     #[test]
     fn view_array() {
-        let cprobs = CarProbs::new(
+        let cprobs = RentalAgency::new(
             3, 2.0, 1.0, 3, 1.0, 2.0, 1);
-            CarProbs::array_to_csv(&cprobs.y2);
+            RentalAgency::array_to_csv(&cprobs.y2);
     }
 
 

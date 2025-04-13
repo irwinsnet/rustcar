@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use config_file::FromConfigFile;
 use serde::Deserialize;
 
-use rustcar2::{cars::CarProbs, policy, solver::State};
+use rustcar2::{cars::RentalAgency, policy, solver::State, learn};
 
 
 /// Command line argument parser.
@@ -25,8 +25,8 @@ enum Commands {
     /// Print rental and return probabilities.
     Probs,
     /// Calculate expected reward for a state.
-    Reward {n1: u8, n2: u8},
-    /// Solve for optimal policy
+    // Reward {n1: u8, n2: u8},
+    // /// Solve for optimal policy
     Trace {s1_n1: u8, s1_n2: u8, s2_n1: u8, s2_n2: u8, a: i8, xt: u32},
     Solve
 }
@@ -53,10 +53,10 @@ fn main() {
         Commands::Probs => {
             cprobs.show_probs();
         }
-        Commands::Reward {n1, n2} => {
-            let r = cprobs.calc_value(&State {n1: *n1, n2: *n2});
-            println!("Expected Reward: {:.2}", r);
-        }
+        // Commands::Reward {n1, n2} => {
+        //     let r = cprobs.calc_value_for_action(&State {n1: *n1, n2: *n2}, 0i8);
+        //     println!("Expected Reward: {:.2}", r);
+        // }
         Commands::Trace {s1_n1, s1_n2, s2_n1, s2_n2, a, xt  } => {
             let s1 = State { n1: *s1_n1, n2: *s1_n2 };
             let s2 = State { n1: *s2_n1, n2: *s2_n2 };
@@ -65,23 +65,18 @@ fn main() {
                 println!("{:?}", oc);
             }
         }
-        Commands::Solve => {println!("Solve the car rental problem.???!!")}
+        Commands::Solve => { learn(cprobs) }
     }
-
-    println!("Initializing Policy.");
-    let cpolicy = rustcar2::policy::Policy::new(
-        cprobs.max1, cprobs.max2, cprobs.max_move
-    );
 }
 
 
-fn get_carprobs_from_config(config_path: &PathBuf) -> CarProbs {
+fn get_carprobs_from_config(config_path: &PathBuf) -> RentalAgency {
     println!("Reading config file: {}", config_path.to_str()
         .expect("Involid file path."));
     let config = CarConfig::from_config_file(config_path)
         .expect("Unable to read configuration file.");
     println!("Calculating rental and return probabilities.");
-    let cprobs = rustcar2::cars::CarProbs::new(
+    let cprobs = rustcar2::cars::RentalAgency::new(
         config.max1, config.rent_mean1, config.return_mean1,
         config.max2, config.rent_mean2, config.return_mean2,
         config.max_move);
