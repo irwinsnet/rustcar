@@ -28,8 +28,12 @@ pub struct Policy {
     pub max_move: u8,
     /// Indexes are n1, n2, a + max_move
     pub action_value: ndarray::Array3<f64>,
+    /// Indexes are n1, n2, a + max_move
+    pub action_value_diff: ndarray::Array3<f64>,
     /// Indexes are n1, n2
-    pub policy: ndarray::Array2<i8>
+    pub policy: ndarray::Array2<i8>,
+    /// Indexes are n1, n2
+    pub policy_diff: ndarray::Array2<i8>
 }
 
 impl Policy {
@@ -41,11 +45,17 @@ impl Policy {
             ((max1 + 1) as usize, (max2 + 1) as usize, total_moves as usize);
         let action_value = 
             ndarray::Array3::<f64>::zeros(dimensions);
+        let action_value_diff = 
+            ndarray::Array3::<f64>::zeros(dimensions);
         let policy_array =
             ndarray::Array2::<i8>::zeros(
                 ((max1 + 1) as usize, (max2 + 1) as usize));
+        let policy_diff =
+            ndarray::Array2::<i8>::zeros(
+                ((max1 + 1) as usize, (max2 + 1) as usize));
         let policy = Policy {
-            max1, max2, max_move, action_value, policy: policy_array
+            max1, max2, max_move, action_value, action_value_diff,
+            policy: policy_array, policy_diff
         };
         policy
     }
@@ -62,6 +72,16 @@ impl Policy {
     pub fn set_value(&mut self, n1: u8, n2: u8, a: i8, v: f64) {
         let a_idx = (a + self.max_move as i8) as usize;
         self.action_value[[n1 as usize, n2 as usize, a_idx]] = v;
+    }
+
+    pub fn get_value_diff(&self, n1: u8, n2: u8, a: i8) -> f64 {
+        let a_idx = (a + self.max_move as i8) as usize;
+        self.action_value_diff[[n1 as usize, n2 as usize, a_idx]]
+    }
+
+    pub fn set_value_diff(&mut self, n1: u8, n2: u8, a: i8, v: f64) {
+        let a_idx = (a + self.max_move as i8) as usize;
+        self.action_value_diff[[n1 as usize, n2 as usize, a_idx]] = v;
     }
 }
 

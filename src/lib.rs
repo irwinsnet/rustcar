@@ -1,5 +1,6 @@
 #![allow(unused)]
 use std::cmp;
+use ndarray_stats::QuantileExt;
 
 pub mod cars;
 pub mod policy;
@@ -8,7 +9,19 @@ pub mod solver;
 
 pub fn learn(mut agency: cars::RentalAgency) {
     let mut pi = policy::Policy::build_from_agency(&agency);
-    
+    let mut value_diff = f64::MAX;
+    while value_diff > 0.1 {
+        pi = update_values(&agency, pi);
+        value_diff = *pi.action_value_diff.max().unwrap();
+        println!("Max value diff: {}", value_diff);
+    }
+}
+
+
+pub fn update_values(
+    agency: &cars::RentalAgency,
+    mut pi: policy::Policy
+) -> policy::Policy {   
     // Estimate values for all states and actions.
     for s1 in solver::StateIterator::new(agency.max1, agency.max2) {
         let min_move = -1 * cmp::min(
@@ -19,11 +32,13 @@ pub fn learn(mut agency: cars::RentalAgency) {
             cmp::min(agency.max_move, s1.n1),
             agency.max2 - s1.n2) as i8;
         for a in min_move..(max_move + 1) {
+            let prior_val = pi.get_value(s1.n1, s1.n2, a);
             let val = agency.calc_value_for_action(&s1, a, &pi);
             pi.set_value(s1.n1, s1.n2, a, val);
-            println!("State: {s1}, Action: {a}, Value: {val}")
+            pi.set_value_diff(s1.n1, s1.n2, a, val - prior_val);
         }
     }
+    pi
 }
 
 
