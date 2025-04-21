@@ -6,6 +6,7 @@
 
 #![allow(unused)]
 
+use std::cmp;
 use crate::cars::RentalAgency;
 
 
@@ -26,10 +27,10 @@ pub struct Policy {
     pub max2: u8,
     /// Maximum nmber of cars that can be moved between locations
     pub max_move: u8,
-    /// Indexes are n1, n2, a + max_move
-    pub action_value: ndarray::Array3<f64>,
-    /// Indexes are n1, n2, a + max_move
-    pub action_value_diff: ndarray::Array3<f64>,
+    /// Indexes are n1, n2
+    pub value: ndarray::Array2<f64>,
+    /// Indexes are n1, n2
+    pub value_diff: ndarray::Array2<f64>,
     /// Indexes are n1, n2
     pub policy: ndarray::Array2<i8>,
     /// Indexes are n1, n2
@@ -42,47 +43,68 @@ impl Policy {
     ) -> Policy {
         let total_moves = max_move * 2 + 1;
         let dimensions =
-            ((max1 + 1) as usize, (max2 + 1) as usize, total_moves as usize);
-        let action_value = 
-            ndarray::Array3::<f64>::zeros(dimensions);
-        let action_value_diff = 
-            ndarray::Array3::<f64>::zeros(dimensions);
-        let policy_array =
-            ndarray::Array2::<i8>::zeros(
-                ((max1 + 1) as usize, (max2 + 1) as usize));
+            ((max1 + 1) as usize, (max2 + 1) as usize);
+        let value = 
+            ndarray::Array2::<f64>::zeros(dimensions);
+        let value_diff = 
+            ndarray::Array2::<f64>::zeros(dimensions);
+        let policy =
+            ndarray::Array2::<i8>::zeros(dimensions);
         let policy_diff =
-            ndarray::Array2::<i8>::zeros(
-                ((max1 + 1) as usize, (max2 + 1) as usize));
-        let policy = Policy {
-            max1, max2, max_move, action_value, action_value_diff,
-            policy: policy_array, policy_diff
-        };
-        policy
+            ndarray::Array2::<i8>::zeros(dimensions);
+        Policy {
+            max1, max2, max_move, value, value_diff,
+            policy, policy_diff
+        }
     }
 
     pub fn build_from_agency(agency: &RentalAgency) -> Policy {
         Policy::new(agency.max1, agency.max2, agency.max_move)
     }
 
-    pub fn get_value(&self, n1: u8, n2: u8, a: i8) -> f64 {
-        let a_idx = (a + self.max_move as i8) as usize;
-        self.action_value[[n1 as usize, n2 as usize, a_idx]]
+    pub fn get_value(&self, n1: u8, n2: u8) -> f64 {
+        self.value[[n1 as usize, n2 as usize]]
     }
 
-    pub fn set_value(&mut self, n1: u8, n2: u8, a: i8, v: f64) {
-        let a_idx = (a + self.max_move as i8) as usize;
-        self.action_value[[n1 as usize, n2 as usize, a_idx]] = v;
+    pub fn set_value(&mut self, n1: u8, n2: u8, v: f64) {
+        self.value[[n1 as usize, n2 as usize]] = v;
     }
 
-    pub fn get_value_diff(&self, n1: u8, n2: u8, a: i8) -> f64 {
-        let a_idx = (a + self.max_move as i8) as usize;
-        self.action_value_diff[[n1 as usize, n2 as usize, a_idx]]
+    pub fn get_value_diff(&self, n1: u8, n2: u8) -> f64 {
+        self.value_diff[[n1 as usize, n2 as usize]]
     }
 
-    pub fn set_value_diff(&mut self, n1: u8, n2: u8, a: i8, v: f64) {
-        let a_idx = (a + self.max_move as i8) as usize;
-        self.action_value_diff[[n1 as usize, n2 as usize, a_idx]] = v;
+    pub fn set_value_diff(&mut self, n1: u8, n2: u8, v: f64) {
+        self.value_diff[[n1 as usize, n2 as usize]] = v;
     }
+
+    /// Get move with highest value.
+    /// 
+    /// If all moves have zero value, best move is a = 0.
+    pub fn get_best_move(&self, n1: u8, n2: u8) -> (i8, f64) {
+        let min_move =
+            -(cmp::min(
+                cmp::min(n2, self.max_move) as i8, 
+                (self.max1 - n1) as i8)
+            );
+        let max_move = 
+        cmp::min(
+            cmp::min(n1, self.max_move) as i8,
+            (self.max2 - n2) as i8
+        );
+        let mut max_value = 0.0;
+        let mut best_move: i8 = 0;
+        for a in min_move..max_move + 1 {
+            let value = self.get_value(
+                ((n1 as i8) - a) as u8, ((n2 as i8) + a) as u8);
+            if value > max_value {
+                max_value = value;
+                best_move = a;
+            }
+        }
+        (best_move, max_value)
+    }
+
 }
 
 
@@ -95,17 +117,27 @@ mod tests {
         // Act
         let dpolicy = Policy::new(4, 4, 2);
         // Assert
-        let vdims = dpolicy.action_value.dim();
+        let vdims = dpolicy.value.dim();
         let pdims = dpolicy.policy.dim();
-        assert_eq!(dpolicy.action_value.ndim(), 3);
+        assert_eq!(dpolicy.value.ndim(), 2);
         assert_eq!(vdims.0, 5);
         assert_eq!(vdims.1, 5);
-        assert_eq!(vdims.2, 5);
-        assert_eq!(dpolicy.action_value[[0, 0, 0]], 0.0);
+        assert_eq!(dpolicy.value[[0, 0]], 0.0);
         assert_eq!(dpolicy.policy.ndim(), 2);
         assert_eq!(pdims.0, 5);
         assert_eq!(pdims.1, 5);
         assert_eq!(dpolicy.policy[[0, 0]], 0);
     }
 
+    #[test]
+    fn test_action_values() {
+        // Arrange
+        let dpolicy = Policy::new(4, 4, 2);
+        // Act
+        let best_move = dpolicy.get_best_move(1, 2);
+        // Assert
+        println!("Action: {}, Value: {}", best_move.0, best_move.1);
+        assert!(best_move.0 >= -2 && best_move.0 <= 2);
+        assert!(best_move.1 >= 0.0);
+    }
 }

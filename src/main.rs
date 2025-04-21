@@ -65,7 +65,11 @@ fn main() {
                 println!("{:?}", oc);
             }
         }
-        Commands::Solve => { learn(cprobs) }
+        Commands::Solve => {
+            let pi = learn(cprobs);
+            println!("\nOptimal Policy?");
+            RentalAgency::show_array(&pi.policy, String::from("Cars on Lot #2: "));
+         }
     }
 }
 

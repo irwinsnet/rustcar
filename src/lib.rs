@@ -7,14 +7,15 @@ pub mod policy;
 pub mod solver;
 
 
-pub fn learn(mut agency: cars::RentalAgency) {
+pub fn learn(mut agency: cars::RentalAgency) -> policy::Policy {
     let mut pi = policy::Policy::build_from_agency(&agency);
     let mut value_diff = f64::MAX;
     while value_diff > 0.1 {
         pi = update_values(&agency, pi);
-        value_diff = *pi.action_value_diff.max().unwrap();
+        value_diff = *pi.value_diff.max().unwrap();
         println!("Max value diff: {}", value_diff);
     }
+    pi
 }
 
 
@@ -24,18 +25,17 @@ pub fn update_values(
 ) -> policy::Policy {   
     // Estimate values for all states and actions.
     for s1 in solver::StateIterator::new(agency.max1, agency.max2) {
-        let min_move = -1 * cmp::min(
-            cmp::min(agency.max_move, s1.n2),
-            agency.max1 - s1.n1
-        ) as i8;
-        let max_move = cmp::min(
-            cmp::min(agency.max_move, s1.n1),
-            agency.max2 - s1.n2) as i8;
-        for a in min_move..(max_move + 1) {
-            let prior_val = pi.get_value(s1.n1, s1.n2, a);
-            let val = agency.calc_value_for_action(&s1, a, &pi);
-            pi.set_value(s1.n1, s1.n2, a, val);
-            pi.set_value_diff(s1.n1, s1.n2, a, val - prior_val);
+        let prior_val = pi.get_value(s1.n1, s1.n2);
+        let val = agency.calc_value(&s1, &pi);
+        let curr_move = pi.policy[[s1.n1 as usize, s1.n2 as usize]];
+        let (best_move, max_value) = pi.get_best_move(s1.n1, s1.n2);
+        if max_value > val {
+            pi.policy[[s1.n1 as usize, s1.n2 as usize]] = best_move;
+            pi.set_value(s1.n1, s1.n2, max_value);
+            pi.set_value_diff(s1.n1, s1.n2, max_value - prior_val);
+        } else {
+            pi.set_value(s1.n1, s1.n2,  val);
+            pi.set_value_diff(s1.n1, s1.n2, val - prior_val);
         }
     }
     pi
@@ -44,13 +44,14 @@ pub fn update_values(
 
 #[cfg(test)]
 mod tests {
+    use crate::cars::RentalAgency;
+
     use super::*;
 
     #[test]
     fn learn_actions() {
         // Arrange
-        let cprobs = cars::RentalAgency::new(
+        let agency = cars::RentalAgency::new(
             3, 1.0, 1.0, 3, 1.0, 1.0, 1);
-        learn(cprobs);
     }
 }

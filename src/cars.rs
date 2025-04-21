@@ -208,8 +208,8 @@ impl RentalAgency {
     }
 
     /// Display a probability table on the command line, for troubleshooting.
-    fn show_array(arr: &ndarray::Array2<f64>, row_prefix: String) {
-        print!("    cars on lot:");
+    pub fn show_array<T: std::fmt::Display>(arr: &ndarray::Array2<T>, row_prefix: String) {
+        print!("            cars on lot:");
         for n in 0..arr.dim().0 {
             print!("{:9}", n);
         }
@@ -282,8 +282,9 @@ impl RentalAgency {
     /// Iterate over all possible states and rewards. Calculate the probability
     /// of each state-reward combination and multiply it times the sum of the
     /// expected reward and the discounted values of the next state (s2).
-    pub fn calc_value_for_action(
-        &self, s1: &State, a: i8, pi: &policy::Policy) -> f64 {
+    pub fn calc_value(
+        &self, s1: &State, pi: &policy::Policy) -> f64 {
+        let a = pi.policy[[s1.n1 as usize, s1.n2 as usize]];
         // Action is invalid if there are not enough cars to move or move exceeds max
         if a > 0 {
             if a + s1.n2 as i8 > self.max2 as i8 || s1.n1 as i8 - a < 0 {
@@ -296,7 +297,7 @@ impl RentalAgency {
         }
         let mut value = 0.0;
         for s2 in StateIterator::new(self.max1, self.max2) {
-            let mut v_s2 = pi.get_value(s2.n1, s2.n2, a);
+            let mut v_s2 = pi.get_value(s2.n1, s2.n2);
             let max_rented = s1.n1.checked_add(s1.n2)
                 .expect("Overflow") as u32;
             for xt in 0..(max_rented + 1) {
@@ -304,6 +305,7 @@ impl RentalAgency {
                 value += reward_prob * (r as f64 + self.g * v_s2);
             }
         }
+        let (best_move, max_value) = pi.get_best_move(s1.n1, s1.n2);
         value
     }
 
@@ -330,6 +332,8 @@ impl RentalAgency {
 
 #[cfg(test)]
 mod tests {
+    use crate::policy::Policy;
+
     use super::*;
     use core::f32;
     use approx::assert_abs_diff_eq;
@@ -383,12 +387,13 @@ mod tests {
     #[test]
     fn test_calc_value_no_cars() {
         // Arrange
-        let cprobs = RentalAgency::new(
+        let agency = RentalAgency::new(
             5, 2.0, 2.0,
             5, 2.0, 1.0, 2);
+        let mut pi = Policy::build_from_agency(&agency);
         let s1 = State {n1: 0, n2: 0};
         // Act
-        let cv = cprobs.calc_value(&s1);
+        let cv = agency.calc_value(&s1, &pi);
         // Assert
         assert_eq!(cv, 0.0);
     }
@@ -396,12 +401,13 @@ mod tests {
     #[test]
     fn test_calc_value_some_cars() {
         // Arrange
-        let cprobs = RentalAgency::new(
+        let agency = RentalAgency::new(
             5, 2.0, 1.0,
             5, 1.0, 2.0, 2);
+        let mut pi = Policy::build_from_agency(&agency);
         let s1 = State {n1: 1, n2: 1};
         // Act
-        let cv = cprobs.calc_value(&s1);
+        let cv = agency.calc_value(&s1, &pi);
         // Assert
         assert!(cv > 0.0);
         assert!(cv < 20.0);
@@ -415,7 +421,8 @@ mod tests {
         let s1 = State { n1: 1, n2: 1 };
         let s2 = State { n1: 0, n2: 0 };
         // Act
-        let (r, prob, trace) = cprobs.calc_reward_prob(&s1, &s2, 0, 2);
+        let (r, prob, trace) = cprobs.calc_reward_prob(
+            &s1, &s2, 0, 2);
         for ocome in trace {
             println!("{:?}", ocome);
         }
