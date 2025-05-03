@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand};
 use config_file::FromConfigFile;
 use serde::Deserialize;
 
-use rustcar2::{cars::RentalAgency, policy, solver::State, learn};
+use rustcar2::{cars::RentalAgency, learn_via_policy_iteration, policy, solver::State};
 
 
 /// Command line argument parser.
@@ -66,7 +66,7 @@ fn main() {
             }
         }
         Commands::Solve => {
-            let pi = learn(cprobs);
+            let pi = learn_via_policy_iteration(cprobs);
             println!("\nOptimal Policy?");
             RentalAgency::show_array(&pi.policy, String::from("Cars on Lot #2: "));
          }

@@ -283,8 +283,10 @@ impl RentalAgency {
     /// of each state-reward combination and multiply it times the sum of the
     /// expected reward and the discounted values of the next state (s2).
     pub fn calc_value(
-        &self, s1: &State, pi: &policy::Policy) -> f64 {
-        let a = pi.policy[[s1.n1 as usize, s1.n2 as usize]];
+        &self, s1: &State, pi: &policy::Policy, action: Option<i8>) -> f64 {
+        let a = action.unwrap_or_else(
+            || pi.policy[[s1.n1 as usize, s1.n2 as usize]]
+        );
         // Action is invalid if there are not enough cars to move or move exceeds max
         if a > 0 {
             if a + s1.n2 as i8 > self.max2 as i8 || s1.n1 as i8 - a < 0 {
@@ -305,7 +307,7 @@ impl RentalAgency {
                 value += reward_prob * (r as f64 + self.g * v_s2);
             }
         }
-        let (best_move, max_value) = pi.get_best_move(s1.n1, s1.n2);
+        // let (best_move, max_value) = pi.get_best_move(s1.n1, s1.n2);
         value
     }
 

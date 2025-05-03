@@ -6,7 +6,7 @@
 
 #![allow(unused)]
 
-use std::cmp;
+use std::{cmp, i8};
 use crate::cars::RentalAgency;
 
 
@@ -30,11 +30,11 @@ pub struct Policy {
     /// Indexes are n1, n2
     pub value: ndarray::Array2<f64>,
     /// Indexes are n1, n2
-    pub value_diff: ndarray::Array2<f64>,
-    /// Indexes are n1, n2
+    pub value_diff: f64,
+    /// Maximum value difference between iterations k and k+1
     pub policy: ndarray::Array2<i8>,
-    /// Indexes are n1, n2
-    pub policy_diff: ndarray::Array2<i8>
+    /// True if policy has changed
+    pub policy_stable: bool
 }
 
 impl Policy {
@@ -46,15 +46,14 @@ impl Policy {
             ((max1 + 1) as usize, (max2 + 1) as usize);
         let value = 
             ndarray::Array2::<f64>::zeros(dimensions);
-        let value_diff = 
-            ndarray::Array2::<f64>::zeros(dimensions);
+        let value_diff = f64::MAX;
         let policy =
             ndarray::Array2::<i8>::zeros(dimensions);
-        let policy_diff =
-            ndarray::Array2::<i8>::zeros(dimensions);
+        let policy_stable = false;
+            ndarray::Array2::<i32>::from_elem(dimensions, total_moves as i32);
         Policy {
             max1, max2, max_move, value, value_diff,
-            policy, policy_diff
+            policy, policy_stable
         }
     }
 
@@ -70,18 +69,19 @@ impl Policy {
         self.value[[n1 as usize, n2 as usize]] = v;
     }
 
-    pub fn get_value_diff(&self, n1: u8, n2: u8) -> f64 {
-        self.value_diff[[n1 as usize, n2 as usize]]
+    pub fn get_policy(&self, n1: u8, n2: u8) -> i8 {
+        self.policy[[n1 as usize, n2 as usize]]
     }
 
-    pub fn set_value_diff(&mut self, n1: u8, n2: u8, v: f64) {
-        self.value_diff[[n1 as usize, n2 as usize]] = v;
+    pub fn set_policy(&mut self, n1: u8, n2: u8, a: i8) {
+        self.policy[[n1 as usize, n2 as usize]] = a;
     }
+
 
     /// Get move with highest value.
     /// 
     /// If all moves have zero value, best move is a = 0.
-    pub fn get_best_move(&self, n1: u8, n2: u8) -> (i8, f64) {
+    pub fn get_best_move(&self, n1: u8, n2: u8) -> i8 {
         let min_move =
             -(cmp::min(
                 cmp::min(n2, self.max_move) as i8, 
@@ -102,7 +102,7 @@ impl Policy {
                 best_move = a;
             }
         }
-        (best_move, max_value)
+        best_move
     }
 
 }
